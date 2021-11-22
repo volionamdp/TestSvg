@@ -94,10 +94,13 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio="1:1" />
 
-    <com.example.testsvg.PdfView
+    <com.example.testsvg.pdf.PdfView
         android:id="@+id/test2"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="32dp"
+        android:background="@color/black"
         android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio="1:1"

@@ -1,106 +1,132 @@
-package com.example.testsvg
+package com.example.testsvg.pdf
 
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.PointF
 import android.graphics.RectF
-import android.util.AttributeSet
 import android.util.Log
-import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.View
-import kotlin.math.min
 import kotlin.math.sqrt
+import kotlin.random.Random
 
-class PdfView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null
-) : View(context, attrs) {
+class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
+    PdfBaseMode(context = context, updateView = updateView) {
+    private var lastY = 0f
+    private var lastX = 0f
+    private var typeTouch: Int = PdfView.TYPE_MOVE
+    private var lastScale = 1f
+    private var currentPage: Page? = null
     private var listDraw: MutableList<Page> = mutableListOf()
     private var pdfMatrix: Matrix = Matrix()
-    private val space = 20
+    private val spaceVertical = 20f
     private val spaceHorizontal = 20f
+
     private val pointScaleCenter = PointF(0f, 0f)
     private val minScale = 1f
     private val maxScale = 3f
-
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        init()
-    }
-
-    private fun init() {
+    private var width: Int = 1
+    private var height: Int = 1
+    private var currentPagePosition = 0
+    override fun initData(viewWidth: Int, viewHeight: Int) {
+        width = viewWidth
+        height = viewHeight
         listDraw.clear()
-        val height = width * 1.5f
-        for (i in 0..3) {
-            val page = Page(i)
-            val top = i * (height + space) + space
+        var totalHeight = 0f
+        for (index in 0 until getPageCount()) {
+            val originRect = getPageSize(index)
+            val pageWidth = width - 2f * spaceHorizontal
+            val pageHeight = pageWidth * originRect.height() / originRect.width()
+            val top = totalHeight + spaceVertical
+            totalHeight = top + pageHeight
+            val page = Page(context,index,viewWidth,viewHeight){
+                updateView()
+            }
+            Log.d("zzz", "initData: $pageHeight")
             page.setRect(
                 RectF(
                     spaceHorizontal,
                     top,
                     width.toFloat() - spaceHorizontal,
-                    top + height
+                    top + pageHeight
                 )
             )
             listDraw.add(page)
         }
     }
 
-    override fun onDraw(canvas: Canvas?) {
+    val random = Random(1)
+    private fun getPageSize(index: Int): RectF {
+        val width = 1f
+        val height = random.nextFloat() + 1f
+        return RectF(0f, 0f, width, height)
+    }
+
+    private fun getPageCount(): Int {
+        return 6
+    }
+
+
+    override fun draw(canvas: Canvas) {
         for (page in listDraw) {
-            if (canvas != null) {
-                page.draw(canvas)
-            }
+            page.draw(canvas)
         }
     }
 
-    private var lastY = 0f
-    private var lastX = 0f
-    private var typeTouch:Int = TYPE_MOVE
-    private var lastScale = 1f
-    private var currentPage:Page? = null
-    override fun onTouchEvent(event: MotionEvent?): Boolean {
-        when (event?.action?.and(MotionEvent.ACTION_MASK)) {
+    override fun changePage(position: Int) {
+        if (position != currentPagePosition){
+            currentPagePosition = position
+        }
+    }
+    override fun release() {
+        for (page in listDraw) page.release()
+    }
+    override fun touch(event: MotionEvent): Boolean {
+        when (event.action.and(MotionEvent.ACTION_MASK)) {
             MotionEvent.ACTION_DOWN -> {
                 lastY = event.y
                 lastX = event.x
-                if (typeTouch == TYPE_DRAWING) {
+                if (typeTouch == PdfView.TYPE_DRAWING) {
                     findDownPage(event)
                     currentPage?.downTouch(event)
                 }
             }
-            MotionEvent.ACTION_POINTER_DOWN->{
+            MotionEvent.ACTION_POINTER_DOWN -> {
                 Log.d("zvv", "onTouchEvent: ACTION_POINTER_DOWN")
-                calculateMidPoint(event,pointScaleCenter)
+                calculateMidPoint(event, pointScaleCenter)
                 lastScale = calculateDistance(event)
-                typeTouch = TYPE_SCALE
+                typeTouch = PdfView.TYPE_SCALE
             }
             MotionEvent.ACTION_MOVE -> {
-                if (typeTouch == TYPE_MOVE) {
+                if (typeTouch == PdfView.TYPE_MOVE) {
                     pdfMatrix.postTranslate(event.x - lastX, event.y - lastY)
                     lastY = event.y
                     lastX = event.x
                 }
-                if (event.pointerCount == 2 && typeTouch == TYPE_SCALE){
+                if (event.pointerCount == 2 && typeTouch == PdfView.TYPE_SCALE) {
                     val scale = calculateDistance(event)
-                    pdfMatrix.postScale(scale/lastScale,scale/lastScale,pointScaleCenter.x,pointScaleCenter.y)
+                    pdfMatrix.postScale(
+                        scale / lastScale,
+                        scale / lastScale,
+                        pointScaleCenter.x,
+                        pointScaleCenter.y
+                    )
                     lastScale = scale
                     Log.d("zvv", "onTouchEvent: ")
                 }
-                if (typeTouch == TYPE_DRAWING){
+                if (typeTouch == PdfView.TYPE_DRAWING) {
                     currentPage?.moveTouch(event)
                 }
                 updatePage()
                 standardizePage()
-                invalidate()
+                updateView()
             }
 
-            MotionEvent.ACTION_UP->{
+            MotionEvent.ACTION_UP -> {
                 Log.d("zzvv", "onTouchEvent: ${event.eventTime - event.downTime}")
-                if (event.eventTime - event.downTime < 250){
-                    if (typeTouch != TYPE_MOVE) typeTouch = TYPE_MOVE
-                    else if (typeTouch == TYPE_MOVE) typeTouch = TYPE_DRAWING
+                if (event.eventTime - event.downTime < 250) {
+                    if (typeTouch != PdfView.TYPE_MOVE) typeTouch = PdfView.TYPE_MOVE
+                    else if (typeTouch == PdfView.TYPE_MOVE) typeTouch = PdfView.TYPE_DRAWING
                 }
                 Log.d("zzvv", "onTouchEvent: ${typeTouch}")
 
@@ -108,18 +134,21 @@ class PdfView @JvmOverloads constructor(
         }
         return true
     }
-    private fun findDownPage(motionEvent: MotionEvent){
-        for (page in listDraw){
-            if (page.getRectDraw().contains(motionEvent.x,motionEvent.y)){
+
+    private fun findDownPage(motionEvent: MotionEvent) {
+        for (page in listDraw) {
+            if (page.getRectDraw().contains(motionEvent.x, motionEvent.y)) {
                 currentPage = page
             }
         }
     }
+
     private fun calculateDistance(event: MotionEvent): Float {
         val x = event.getX(0) - event.getX(1)
         val y = event.getY(0) - event.getY(1)
         return sqrt((x * x + y * y).toDouble()).toFloat()
     }
+
     private fun calculateMidPoint(event: MotionEvent, point: PointF) {
         point.x = (event.getX(0) + event.getX(1)) / 2
         point.y = (event.getY(0) + event.getY(1)) / 2
@@ -150,15 +179,15 @@ class PdfView @JvmOverloads constructor(
     }
 
     private fun standardizePageScrollY(rectFirs: RectF, rectLast: RectF) {
-        if (rectFirs.top > space) {
-            pdfMatrix.postTranslate(0f, space - rectFirs.top)
+        if (rectFirs.top > spaceVertical) {
+            pdfMatrix.postTranslate(0f, spaceVertical - rectFirs.top)
             updateMatrix()
-        } else if (rectLast.bottom < height - space) {
-            val tY = height - space - rectLast.bottom
-            if (rectFirs.top + tY < space) {
+        } else if (rectLast.bottom < height - spaceVertical) {
+            val tY = height - spaceVertical - rectLast.bottom
+            if (rectFirs.top + tY < spaceVertical) {
                 pdfMatrix.postTranslate(0f, tY)
             } else {
-                pdfMatrix.postTranslate(0f, space - rectFirs.top)
+                pdfMatrix.postTranslate(0f, spaceVertical - rectFirs.top)
             }
             updateMatrix()
 
@@ -167,14 +196,14 @@ class PdfView @JvmOverloads constructor(
 
     private fun standardizePageScrollX(rectFirs: RectF, rectLast: RectF) {
         if (rectFirs.left > spaceHorizontal) {
-            pdfMatrix.postTranslate( spaceHorizontal - rectFirs.left,0f)
+            pdfMatrix.postTranslate(spaceHorizontal - rectFirs.left, 0f)
             updateMatrix()
         } else if (rectLast.right < width - spaceHorizontal) {
             val tX = width - spaceHorizontal - rectLast.right
             if (rectFirs.left + tX < spaceHorizontal) {
-                pdfMatrix.postTranslate( tX,0f)
+                pdfMatrix.postTranslate(tX, 0f)
             } else {
-                pdfMatrix.postTranslate( spaceHorizontal - rectFirs.left,0f)
+                pdfMatrix.postTranslate(spaceHorizontal - rectFirs.left, 0f)
             }
             updateMatrix()
 
@@ -193,7 +222,7 @@ class PdfView @JvmOverloads constructor(
             )
             updateMatrix()
         }
-        if (currentScale > maxScale){
+        if (currentScale > maxScale) {
             pdfMatrix.postScale(
                 maxScale / currentScale,
                 maxScale / currentScale,
@@ -202,12 +231,5 @@ class PdfView @JvmOverloads constructor(
             )
             updateMatrix()
         }
-    }
-
-    companion object{
-        val TYPE_DEFAULT = 0
-        val TYPE_MOVE = 1
-        val TYPE_SCALE = 2
-        val TYPE_DRAWING = 3
     }
 }
