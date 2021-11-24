@@ -1,0 +1,30 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.artifex.mupdfdemo" >
+4
+5    <uses-sdk
+6        android:minSdkVersion="15"
+6-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml
+7        android:targetSdkVersion="30" />
+7-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml
+8
+9    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+9-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:4:5-81
+9-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:4:22-78
+10    <uses-permission android:name="android.permission.INTERNET" />
+10-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:5:5-67
+10-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:5:22-64
+11
+12    <!-- <supports-screens -->
+13    <!-- android:smallScreens="true" -->
+14    <!-- android:normalScreens="true" -->
+15    <!-- android:largeScreens="true" -->
+16    <!-- android:anyDensity="true" /> -->
+17    <application>
+17-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:12:5-16:19
+18        <activity android:name="com.artifex.mupdfdemo.ChoosePDFActivity" />
+18-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:14:9-53
+18-->D:\TestSvg\mupdf-android\src\main\AndroidManifest.xml:14:19-51
+19    </application>
+20
+21</manifest>

@@ -7,5 +7,10 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "TestSvg"
+include ':mupdfJni'
 include ':app'
+include ':mupdf-android'
+
+
 include ':androidsvg'
+include ':pdfEditer'

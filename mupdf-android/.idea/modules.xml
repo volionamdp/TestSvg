@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/1712087782/Pdf.iml" filepath="$PROJECT_DIR$/.idea/modules/1712087782/Pdf.iml" group="Pdf" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/-238332040/app.iml" filepath="$PROJECT_DIR$/.idea/modules/-238332040/app.iml" group="Pdf/app" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/mupdf-android.iml" filepath="$PROJECT_DIR$/.idea/modules/mupdf-android.iml" group="Pdf/mupdf-android" />
+    </modules>
+  </component>
+</project>

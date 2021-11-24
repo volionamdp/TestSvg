@@ -3,12 +3,15 @@ package com.example.testsvg
 import android.graphics.*
 import android.os.Bundle
 import android.os.Environment
-import android.util.Log
+import android.view.View
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.content.res.AppCompatResources
+import androidx.constraintlayout.widget.ConstraintLayout
+import com.artifex.mupdfdemo.MuPDFCore
 import com.caverock.androidsvg.SVG
-import com.caverock.androidsvg.SVGImageView
+import com.example.testsvg.border.BolderImage
+import com.volio.pdfediter.pdf.PdfView
+import com.volio.pdfediter.pdf.PdfViewMode
 import java.io.File
 import java.io.FileInputStream
 
@@ -28,6 +31,34 @@ class MainActivity : AppCompatActivity() {
 //        imageView.setImageBitmap(bitmap2)
 //        val image2: TestView = findViewById(R.id.test2)
 //        image2.setSVG(svg)
+//        findViewById<ConstraintLayout>(R.id.test3).apply {
+//            val borderImage = findViewById<ImageView>(R.id.imgBorder)
+//            val content = findViewById<View>(R.id.test1)
+//            viewTreeObserver.addOnGlobalLayoutListener {
+//                val border = BolderImage()
+//                border.loadDataAsset(assets,"border/goc2.svg","border/canh2.svg")
+//                val background = BitmapFactory.decodeResource(resources,R.drawable.background)
+//                val borderData = border.getBorder(width = width,height = height ,color = Color.BLUE)
+////                val borderData = border.getBorder(width = width,height = height )
+//
+//                borderImage.setImageBitmap(borderData.bitmap)
+//                val padding = borderData.padding.toInt()
+//                val layoutParams = content.layoutParams as ConstraintLayout.LayoutParams
+//                layoutParams.setMargins(padding,padding,padding,padding)
+//            }
+//        }
+        val pdf = findViewById<PdfView>(R.id.test2).apply {
+            val core = MuPDFCore(context,Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path+File.separator+"test.pdf")
+            setPdfCore(core)
+        }
+        findViewById<View>(R.id.btnClick).setOnClickListener {
+            if (pdf.getCurrentMode() == PdfViewMode.TYPE_HORIZONTAL_PAGE_BY_PAGE){
+                pdf.setPdfMode(PdfViewMode.TYPE_HORIZONTAL_CONTINUOUS)
+            }else{
+                pdf.setPdfMode(PdfViewMode.TYPE_HORIZONTAL_PAGE_BY_PAGE)
+            }
+        }
+
 
 
 

@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#00BCD4"
+    android:background="#000000"
     tools:context=".MainActivity">
 
 <!--    <com.caverock.androidsvg.SVGImageView-->
@@ -86,15 +86,33 @@
 <!--        app:layout_constraintBottom_toBottomOf="parent"-->
 <!--        app:layout_constraintDimensionRatio="1:1" />-->
 
-    <ImageView
-        android:id="@+id/test1"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/test3"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:visibility="visible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintDimensionRatio="1:1" />
+        app:layout_constraintDimensionRatio="1:1.3"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent">
+        <ImageView
+            android:id="@+id/test1"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/anh2"
+            android:scaleType="centerCrop"
+            android:visibility="visible"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintDimensionRatio="2:3" />
 
-    <com.example.testsvg.pdf.PdfView
+        <ImageView
+            android:id="@+id/imgBorder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+    <com.volio.pdfediter.pdf.PdfView
         android:id="@+id/test2"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -107,5 +125,10 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+    <Button
+        android:id="@+id/btnClick"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="test"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
