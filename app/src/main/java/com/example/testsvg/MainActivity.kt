@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
 //            }
 //        }
         val pdf = findViewById<PdfView>(R.id.test2).apply {
-            val core = MuPDFCore(context,Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path+File.separator+"test.pdf")
+            val core = MuPDFCore(context,Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path+File.separator+"test2.pdf")
             setPdfCore(core)
         }
         findViewById<View>(R.id.btnClick).setOnClickListener {

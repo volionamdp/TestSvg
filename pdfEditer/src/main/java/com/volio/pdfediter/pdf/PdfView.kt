@@ -15,6 +15,21 @@ class PdfView @JvmOverloads constructor(
     var pdfBaseMode:PdfBaseMode? = null
     var muPDFCore:MuPDFCore? = null
     var beforePage:Int = 0
+    private val callback = object :PdfPageCallback{
+        override fun updateView() {
+            postInvalidate()
+        }
+
+        override fun changePage(position: Int) {
+            Log.d("zveet2", "changePage: $position")
+
+        }
+
+        override fun scroll(percent: Float) {
+            Log.d("zveet", "scroll: $percent")
+        }
+
+    }
     init {
         setPdfMode(viewMode)
     }
@@ -43,7 +58,6 @@ class PdfView @JvmOverloads constructor(
         when(viewMode){
             PdfViewMode.TYPE_VERTICAL_CONTINUOUS->{
                 createPdfVerticalContinuousMode()
-                initData()
             }
             PdfViewMode.TYPE_VERTICAL_PAGE_BY_PAGE->{
                 createPdfVerticalPageByPageMode()
@@ -61,25 +75,19 @@ class PdfView @JvmOverloads constructor(
         initData()
     }
     private fun createPdfVerticalContinuousMode(){
-        pdfBaseMode = PdfVerticalContinuousMode(context){
-            postInvalidate()
-        }
+        pdfBaseMode = PdfVerticalContinuousMode(context,callback)
     }
     private fun createPdfVerticalPageByPageMode(){
-        pdfBaseMode = PdfVerticalPageByPageMode(context){
-            postInvalidate()
-        }
+        pdfBaseMode = PdfVerticalPageByPageMode(context,callback)
+
     }
 
     private fun createPdfHorizontalContinuousMode(){
-        pdfBaseMode = PdfHorizontalContinuousMode(context){
-            postInvalidate()
-        }
+        pdfBaseMode = PdfHorizontalContinuousMode(context,callback)
+
     }
     private fun createPdfHorizontalPageByPageMode(){
-        pdfBaseMode = PdfHorizontalPageByPageMode(context){
-            postInvalidate()
-        }
+        pdfBaseMode = PdfHorizontalPageByPageMode(context,callback)
     }
 
 
@@ -105,10 +113,14 @@ class PdfView @JvmOverloads constructor(
 //        }
 //    }
 
+    var time = System.currentTimeMillis()
+
     override fun onDraw(canvas: Canvas?) {
+        time = System.currentTimeMillis()
         canvas?.let {
             pdfBaseMode?.draw(canvas)
         }
+        Log.d("timeDraw", "onDraw: ${System.currentTimeMillis() - time}")
     }
 
 
@@ -126,7 +138,8 @@ class PdfView @JvmOverloads constructor(
         val TYPE_MOVE = 1
         val TYPE_SCALE = 2
         val TYPE_DRAWING = 3
-
+        val TYPE_SELECT = 4
+        val TYPE_SELECT_NON_MOVE = 5
 
     }
 }

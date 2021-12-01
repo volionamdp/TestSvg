@@ -4,24 +4,30 @@ import android.content.Context
 import android.graphics.*
 import android.util.Log
 import android.view.MotionEvent
+import com.artifex.mupdf.fitz.StructuredText
 import com.artifex.mupdfdemo.MuPDFCore
 import kotlinx.coroutines.*
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
 class Page(
     val context: Context,
     val position: Int,
-    val core: MuPDFCore,
-    val viewWidth: Int,
-    val viewHeight: Int,
-    val updateView: () -> Unit
+    private val core: MuPDFCore,
+    private val viewWidth: Int,
+    private val viewHeight: Int,
+    private val updateView: () -> Unit
 ) {
     // kích thước page hiện tại
     private var rectDraw = RectF()
 
     // kich thước sau khi scale ban đầu
     private var rectDefaultView = RectF()
+
+    private var rectOriginPage = RectF()
+
     private var recBitmap = Rect()
     private var recBitmapScale = Rect()
 
@@ -32,20 +38,36 @@ class Page(
     private var paintDrawing = Paint(Paint.ANTI_ALIAS_FLAG)
     private var currentMatrix: Matrix = Matrix()
     private var invertMatrix: Matrix = Matrix()
+    private var pageMatrix: Matrix = Matrix()
+    private var invertPageMatrix: Matrix = Matrix()
+
     private var path = Path()
     private var job: Job? = null
-    private var jobLoadHighQuality:Job? = null
+    private var jobLoadHighQuality: Job? = null
     private var dataBitmap: Bitmap? = null
     private var dataBitmapScale: Bitmap? = null
     private var scaleLoadHighQuality: Float = 1.5f
+
+    private var paintBitmapTest = Paint()
+    private var paintTextTest = Paint()
+
+    private var textSelectCtr = PageTextSelectCtr()
+    private var textBlock: MutableList<StructuredText.TextBlock> = mutableListOf()
+
+    private var rectSelectView:RectF = RectF()
+
+    private var listRectSelect:MutableList<RectF> = mutableListOf()
 
     init {
         paint.color = Color.BLUE
         paintDrawing.color = Color.RED
         paintDrawing.style = Paint.Style.STROKE
         paintDrawing.strokeWidth = 5f
-        paint.color = Color.rgb(range.nextInt(), range.nextInt(), range.nextInt())
-
+        paint.color = Color.WHITE
+        rectOriginPage.set(getPageOriginSize())
+        paintTextTest.color = Color.BLACK
+        paintTextTest.textSize = 20f
+        paintTextTest.textAlign = Paint.Align.CENTER
     }
 
     fun getPageOriginSize(): RectF {
@@ -56,6 +78,8 @@ class Page(
     fun setDefaultRect(rectF: RectF) {
         this.rectDefaultView.set(rectF)
         this.rectDraw.set(rectF)
+        pageMatrix.setRectToRect(rectOriginPage, rectDraw, Matrix.ScaleToFit.CENTER)
+        pageMatrix.invert(invertPageMatrix)
     }
 
     fun getScaleY(): Float {
@@ -66,6 +90,7 @@ class Page(
         return rectDraw.width() / rectDefaultView.width()
     }
 
+
     fun draw(canvas: Canvas) {
         if ((rectDraw.top > 0 && rectDraw.top < viewHeight) || (rectDraw.bottom > 0 && rectDraw.bottom < viewHeight) || (rectDraw.top < 0 && rectDraw.bottom > viewHeight)) {
             canvas.drawRect(rectDraw, paint)
@@ -75,13 +100,60 @@ class Page(
             dataBitmapScale?.let {
                 if (scaleLoadHighQuality < rectDraw.width() / rectDefaultView.width()) {
                     canvas.drawBitmap(it, recBitmapScale, rectBitmapScaleDraw, null)
+//                    canvas.drawRect(rectBitmapScaleDraw,paintBitmapTest)
                 }
             }
             canvas.save()
             canvas.setMatrix(currentMatrix)
             canvas.drawPath(path, paintDrawing)
             canvas.restore()
+
+            canvas.save()
+            canvas.setMatrix(pageMatrix)
+//            for (i in textBlock.indices) {
+//                val item = textBlock[i]
+//                if (item.color == 0) item.color =
+//                    Color.rgb(range.nextInt(), range.nextInt(), range.nextInt())
+//                paintBitmapTest.color = item.color
+//                canvas.drawRect(item.bbox.toRectF(), paintBitmapTest)
+//                paintBitmapTest.textSize = 20f
+////                canvas.drawText("$i", item.bbox.centerX(), item.bbox.centerY(), paintTextTest)
+//            }
+
+            canvas.drawText(
+                "point1",
+                textSelectCtr.getRectSelect().left,
+                textSelectCtr.getRectSelect().top,
+                paintTextTest
+            )
+            canvas.drawText(
+                "point2",
+                textSelectCtr.getRectSelect().right,
+                textSelectCtr.getRectSelect().bottom,
+                paintTextTest
+            )
+
+            paintTextTest.setColor(Color.BLUE)
+            canvas.drawCircle(
+                textSelectCtr.getPoint1().x,
+                textSelectCtr.getPoint1().y,
+                2f,
+                paintTextTest
+            )
+            canvas.drawCircle(
+                textSelectCtr.getPoint2().x,
+                textSelectCtr.getPoint2().y,
+                2f,
+                paintTextTest
+            )
+            for (rect in listRectSelect){
+                paintBitmapTest.color = Color.argb(50,255,0,0)
+                canvas.drawRect(rect,paintBitmapTest)
+            }
+
+            canvas.restore()
         }
+
     }
 
     fun getRectDraw(): RectF {
@@ -91,13 +163,11 @@ class Page(
 
     fun updateMatrix(matrix: Matrix) {
         matrix.mapRect(rectDraw, rectDefaultView)
-        Log.d("zzz", "updateMatrix: $rectBitmapScaleDraw")
         matrix.mapRect(rectBitmapScaleDraw, rectBitmapScaleDefault)
-        Log.d("zzz", "updateMatrix: $rectBitmapScaleDraw")
-
         matrix.invert(invertMatrix)
         currentMatrix.set(matrix)
-
+        pageMatrix.setRectToRect(rectOriginPage, rectDraw, Matrix.ScaleToFit.CENTER)
+        pageMatrix.invert(invertPageMatrix)
     }
 
     private var dstPointMap: FloatArray = floatArrayOf(0f, 0f)
@@ -107,6 +177,13 @@ class Page(
         srcPointMap[1] = event.y
         matrix.mapPoints(dstPointMap, srcPointMap)
         onMap(dstPointMap[0], dstPointMap[1])
+    }
+
+    fun mapRange(range: Float): Float {
+        srcPointMap[0] = range
+        srcPointMap[1] = range
+        currentMatrix.mapPoints(dstPointMap, srcPointMap)
+        return max(dstPointMap[0], dstPointMap[1])
     }
 
     fun moveTouch(event: MotionEvent) {
@@ -122,20 +199,30 @@ class Page(
         }
     }
 
+    private var downX = 0f
+    private var downY = 0f
     fun touchEvent(event: MotionEvent) {
+        Log.d("zvvee", "touchEvent: ")
+
 //        when (event.action.and(MotionEvent.ACTION_MASK)) {
 //            MotionEvent.ACTION_DOWN -> {
+//                downX = event.x
+//                downY = event.y
 //            }
-//            MotionEvent.ACTION_UP -> {
-//                loadImageScale()
+//            MotionEvent.ACTION_MOVE -> {
+//                Log.d("zvvee", "touchEvent: move")
+//                val pointArray = floatArrayOf(downX, downY, event.x, event.y)
+//                val pointMap = FloatArray(4)
+//                invertPageMatrix.mapPoints(pointMap, pointArray)
+//                textSelectCtr.changePointSelect(pointMap[0], pointMap[1], pointMap[2], pointMap[3])
+//                updateView()
 //            }
- //       }
+//        }
     }
 
     fun loadImage() {
         if (job == null && dataBitmap == null) {
             job = CoroutineScope(Dispatchers.Default).launch {
-//                val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.anh2)
                 val bitmap = Bitmap.createBitmap(
                     rectDefaultView.width().toInt(),
                     rectDefaultView.height().toInt(),
@@ -156,17 +243,15 @@ class Page(
                 updateView()
 
                 Log.d("zzvvv22", "loadImage: ok  $position")
+                loadText()
 
             }
         }
     }
 
     fun loadImageScale() {
-        Log.d("zzvvv330", "loadImage: $position")
-
         val scale = rectDraw.width() / rectDefaultView.width()
         if (scale > scaleLoadHighQuality) {
-            Log.d("zzvvv33", "loadImage: $position")
             if ((rectDraw.left < 0 && rectDraw.right < 0) || (rectDraw.left > viewWidth && rectDraw.right > viewWidth)
                 || (rectDraw.top < 0 && rectDraw.bottom < 0) || (rectDraw.top > viewHeight && rectDraw.bottom > viewHeight)
             ) {
@@ -190,11 +275,10 @@ class Page(
             }
 
             val templateRectF = RectF(left, top, right, bottom)
-
-            Log.d("zzvv", "loadImageScale: ${rectBitmapScaleDefault.toShortString()}")
+            val templateRealRect = RectF()
+            invertMatrix.mapRect(templateRealRect, templateRectF)
             jobLoadHighQuality?.cancel()
             jobLoadHighQuality = CoroutineScope(Dispatchers.Default).launch {
-//                val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.anh2)
                 val bitmap = Bitmap.createBitmap(
                     templateRectF.width().toInt(),
                     templateRectF.height().toInt(),
@@ -210,13 +294,12 @@ class Page(
                     bitmap.width,
                     bitmap.height
                 )
-                invertMatrix.mapRect(rectBitmapScaleDefault, templateRectF)
+                rectBitmapScaleDefault.set(templateRealRect)
+                currentMatrix.mapRect(rectBitmapScaleDraw, rectBitmapScaleDefault)
                 recBitmapScale.set(0, 0, bitmap.width, bitmap.height)
                 dataBitmapScale = bitmap
                 rectBitmapScaleDraw.set(templateRectF)
                 updateView()
-                Log.d("zzvvv33", "loadImage: ok  $recBitmapScale")
-
             }
         }
 
@@ -229,6 +312,7 @@ class Page(
         job?.cancel()
         job = null
     }
+
     fun cancelLoadHighQualityImage() {
         Log.d("zzvvv22", "cancel: $position")
         dataBitmapScale?.recycle()
@@ -244,6 +328,40 @@ class Page(
         dataBitmap?.recycle()
         dataBitmap = null
     }
+
+
+    fun loadText() {
+        val list = core.getTextBlock(position).toMutableList()
+        textBlock.clear()
+        textBlock.addAll(list)
+        textSelectCtr.setListTextBlock(list)
+        updateView()
+
+    }
+
+    fun checkPointText(x: Float, y: Float): Boolean {
+        val pointArray = floatArrayOf(x, y)
+        val pointMap = FloatArray(2)
+        invertPageMatrix.mapPoints(pointMap, pointArray)
+        return textSelectCtr.checkPointText(pointMap[0], pointMap[1])
+    }
+
+    fun changePointSelect(x0: Float, y0: Float, x1: Float, y1: Float) {
+        val pointArray = floatArrayOf(x0, y0, x1, y1)
+        val pointMap = FloatArray(4)
+        invertPageMatrix.mapPoints(pointMap, pointArray)
+        textSelectCtr.changePointSelect(pointMap[0], pointMap[1], pointMap[2], pointMap[3])
+        val listRectF = textSelectCtr.getListRectSelect()
+        listRectSelect.clear()
+        listRectSelect.addAll(listRectF)
+        updateView()
+    }
+    fun getRectSelect():RectF{
+        pageMatrix.mapRect(rectSelectView, textSelectCtr.getRectSelect())
+        return rectSelectView
+    }
+
+
 
     companion object {
         val range = Random(254)

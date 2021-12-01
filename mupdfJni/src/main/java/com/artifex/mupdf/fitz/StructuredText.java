@@ -93,6 +93,7 @@ public class StructuredText
 	public class TextBlock {
 		public TextLine[] lines;
 		public Rect bbox;
+		public int color = 0;
 		public String getString(){
 			StringBuilder stringBuilder = new StringBuilder();
 			int i = 0;

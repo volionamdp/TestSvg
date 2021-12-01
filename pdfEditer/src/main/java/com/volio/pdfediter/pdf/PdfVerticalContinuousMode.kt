@@ -11,21 +11,15 @@ import com.artifex.mupdfdemo.MuPDFCore
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
-    PdfBaseMode(context = context, updateView = updateView) {
+class PdfVerticalContinuousMode(context: Context, callback: PdfPageCallback) :
+    PdfBaseMode(context = context, callback = callback) {
     private var lastY = 0f
     private var lastX = 0f
-    private var typeTouch: Int = PdfView.TYPE_MOVE
     private var lastScale = 1f
-    private var currentPage: Page? = null
-    private var listDraw: MutableList<Page> = mutableListOf()
-    private var pdfMatrix: Matrix = Matrix()
     private val spaceVertical = 20f
     private val spaceHorizontal = 20f
 
     private val pointScaleCenter = PointF(0f, 0f)
-    private val minScale = 1f
-    private val maxScale = 3f
     private var width: Int = 1
     private var height: Int = 1
     override fun initData(muPDFCore: MuPDFCore, viewWidth: Int, viewHeight: Int) {
@@ -41,7 +35,7 @@ class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
             val top = totalHeight + spaceVertical
             totalHeight = top + pageHeight
             val page = Page(context,index,muPDFCore,viewWidth,viewHeight){
-                updateView()
+                callback.updateView()
             }
             Log.d("zzz", "initData: $pageHeight")
             page.setDefaultRect(
@@ -77,15 +71,32 @@ class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
     override fun release() {
         for (page in listDraw) page.release()
     }
+    override fun updateScroll() {
+        if (listDraw.size > 0){
+            val firstPage = listDraw[0]
+            val lastPage = listDraw[listDraw.size-1]
+            var space = lastPage.getRectDraw().top - firstPage.getRectDraw().top
+            if (space == 0f) space = 1f
+            var scroll = (spaceVertical - firstPage.getRectDraw().top)/space
+            if (scroll < 0) scroll = 0f
+            if (scroll > 1) scroll = 1f
+            callback.scroll(scroll)
+        }
+    }
+
+    override fun fling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float) {
+
+    }
     override fun touch(event: MotionEvent): Boolean {
         when (event.action.and(MotionEvent.ACTION_MASK)) {
             MotionEvent.ACTION_DOWN -> {
                 lastY = event.y
                 lastX = event.x
-                if (typeTouch == PdfView.TYPE_DRAWING) {
-                    findDownPage(event)
-                    currentPage?.downTouch(event)
-                }
+                downTouchEvent(event)
+//                if (typeTouch == PdfView.TYPE_DRAWING) {
+//                    findDownPage(event)
+//                    currentPage?.downTouch(event)
+//                }
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 Log.d("zvv", "onTouchEvent: ACTION_POINTER_DOWN")
@@ -115,7 +126,7 @@ class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
                 }
                 updatePage()
                 standardizePage()
-                updateView()
+                callback.updateView()
             }
 
             MotionEvent.ACTION_UP -> {
@@ -129,6 +140,14 @@ class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
             }
         }
         return true
+    }
+
+    override fun cancelAnim() {
+
+    }
+
+    override fun endAnimZoom() {
+
     }
 
     private fun findDownPage(motionEvent: MotionEvent) {
@@ -154,9 +173,10 @@ class PdfVerticalContinuousMode(context: Context, updateView: () -> Unit) :
         for (page in listDraw) {
             page.updateMatrix(pdfMatrix)
         }
+        updateScroll()
     }
 
-    private fun updatePage() {
+    override fun updatePage() {
         updateMatrix()
         standardizePage()
     }

@@ -15,48 +15,23 @@ import com.artifex.mupdfdemo.MuPDFCore
 import kotlin.math.sqrt
 
 
-class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
-    PdfBaseMode(context = context, updateView = updateView) {
+class PdfHorizontalPageByPageMode(context: Context, callback: PdfPageCallback) :
+    PdfBaseMode(context = context, callback = callback) {
     private var lastY = 0f
     private var lastX = 0f
-    private var typeTouch: Int = PdfView.TYPE_MOVE
     private var lastScale = 1f
-    private var currentPage: Page? = null
-    private var listDraw: MutableList<Page> = mutableListOf()
-    private var pdfMatrix: Matrix = Matrix()
+
     private val spaceVertical = 20f
     private val spaceHorizontal = 20f
 
     private val pointScaleCenter = PointF(0f, 0f)
-    private val minScale = 1f
-    private val maxScale = 3f
     private var width: Int = 1
     private var height: Int = 1
     private var positionPageMaxHeight: Int = 0
     private var flingAnimation: FlingAnimation? = null
     private var anim: ValueAnimator? = null
     private var beforePagePosition: Int = 0
-    private val gestureDetector: GestureDetector =
-        GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent?,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                if (getPageCount() > 0) {
-                    val currentRect = listDraw[currentPagePosition].getRectDraw()
-                    if (currentRect.width() < width) {
-                        if (velocityX > 7000) currentPagePosition--
-                        if (velocityX < -7000) currentPagePosition++
-                        if (currentPagePosition == getPageCount()) currentPagePosition =
-                            getPageCount() - 1
-                        if (currentPagePosition < 0) currentPagePosition = 0
-                    }
-                }
-                return super.onFling(e1, e2, velocityX, velocityY)
-            }
-        })
+
 
     override fun initData(muPDFCore: MuPDFCore, viewWidth: Int, viewHeight: Int) {
         core = muPDFCore
@@ -82,7 +57,7 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
             totalWidth += width
 
             val page = Page(context, index, muPDFCore, viewWidth, viewHeight) {
-                updateView()
+                callback.updateView()
             }
             page.setDefaultRect(
                 RectF(
@@ -112,10 +87,12 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
     }
 
     override fun changePage(position: Int) {
-        if (position != currentPagePosition) {
+        if (position != currentPagePosition && position < getPageCount() && position >= 0) {
             currentPagePosition = position
+            callback.changePage(position)
         }
     }
+
     override fun setCurrentPage(position: Int, isAnim: Boolean) {
         if (position != currentPagePosition) {
             currentPagePosition = position
@@ -123,21 +100,48 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
             else pageToPageNoAnim()
         }
     }
+
     override fun release() {
         currentPagePosition = 0
         for (page in listDraw) page.release()
     }
 
+    override fun updateScroll() {
+        if (listDraw.size > 0) {
+            val firstPage = listDraw[0]
+            val lastPage = listDraw[listDraw.size - 1]
+            var space = lastPage.getRectDraw().left - firstPage.getRectDraw().left
+            if (space == 0f) space = 1f
+            var scroll = (spaceHorizontal - firstPage.getRectDraw().left) / space
+            if (scroll < 0) scroll = 0f
+            if (scroll > 1) scroll = 1f
+            callback.scroll(scroll)
+        }
+    }
+
+    override fun fling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float) {
+        if (getPageCount() > 0) {
+            val currentRect = listDraw[currentPagePosition].getRectDraw()
+            if (currentRect.width() < width) {
+                if (velocityX > 7000) changePage(currentPagePosition - 1)
+
+                if (velocityX < -7000) changePage(currentPagePosition + 1)
+
+                if (currentPagePosition == getPageCount()) currentPagePosition =
+                    getPageCount() - 1
+                if (currentPagePosition < 0) currentPagePosition = 0
+            }
+        }
+    }
+
     override fun touch(event: MotionEvent): Boolean {
         gestureDetector.onTouchEvent(event)
-        for (item in listDraw) {
-            item.touchEvent(event)
-        }
         when (event.action.and(MotionEvent.ACTION_MASK)) {
             MotionEvent.ACTION_DOWN -> {
                 cancelAnim()
                 lastY = event.y
                 lastX = event.x
+                downTouchEvent(event)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 calculateMidPoint(event, pointScaleCenter)
@@ -145,12 +149,11 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
                 typeTouch = PdfView.TYPE_SCALE
             }
             MotionEvent.ACTION_MOVE -> {
-                if (typeTouch == PdfView.TYPE_MOVE) {
+                moveTouchEvent(event,onMove = {
                     pdfMatrix.postTranslate(event.x - lastX, event.y - lastY)
                     lastY = event.y
                     lastX = event.x
-                }
-                if (event.pointerCount == 2 && typeTouch == PdfView.TYPE_SCALE) {
+                },onScale = {
                     val scale = calculateDistance(event)
                     pdfMatrix.postScale(
                         scale / lastScale,
@@ -159,17 +162,17 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
                         pointScaleCenter.y
                     )
                     lastScale = scale
-                }
+                })
                 updatePage()
-                updateView()
+                callback.updateView()
             }
-            MotionEvent.ACTION_POINTER_UP->{
-                Log.d("zvveer", "touch: "+event.pointerCount)
+            MotionEvent.ACTION_POINTER_UP -> {
+                Log.d("zvveer", "touch: " + event.pointerCount)
             }
 
             MotionEvent.ACTION_UP -> {
-                Log.d("zzvv", "onTouchEvent: ${event.eventTime - event.downTime}")
-                if (typeTouch != PdfView.TYPE_MOVE) typeTouch = PdfView.TYPE_MOVE
+                Log.d("zzvvee3", "onTouchEventUp------: ${event.eventTime - event.downTime}")
+                if (typeTouch == PdfView.TYPE_SCALE) typeTouch = PdfView.TYPE_MOVE
 
                 Log.d("zzvv", "onTouchEvent: ${typeTouch}")
                 animUp()
@@ -179,8 +182,13 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
         return true
     }
 
-    private fun cancelAnim() {
+    override fun cancelAnim() {
         flingAnimation?.cancel()
+        anim?.cancel()
+    }
+
+    override fun endAnimZoom() {
+//        animUp()
     }
 
     private fun findDownPage(motionEvent: MotionEvent) {
@@ -219,9 +227,10 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
         for (page in listDraw) {
             page.updateMatrix(pdfMatrix)
         }
+        updateScroll()
     }
 
-    private fun updatePage() {
+    override fun updatePage() {
         updateMatrix()
         standardizePage()
     }
@@ -303,7 +312,7 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
 
     // anim di chuyển
     private fun animUp() {
-        if (listDraw.size == 0) return
+        if (listDraw.size == 0||animZoom?.isRunning==true) return
         if (currentPagePosition != beforePagePosition) {
             animPageByPage()
         } else {
@@ -312,31 +321,31 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
                 var checkAnim = true
                 if (currentRect.left > spaceHorizontal) {
                     if (currentPagePosition > 0) {
-                        currentPagePosition--
+                        changePage(currentPagePosition - 1)
                         animPageByPage()
                     } else {
                         animLeftRight(true)
                     }
-                }else{
+                } else {
                     checkAnim = false
                 }
                 if (currentRect.right < width - spaceHorizontal) {
                     if (currentPagePosition < getPageCount() - 1) {
-                        currentPagePosition++
+                        changePage(currentPagePosition + 1)
                         animPageByPage()
                     } else {
                         animLeftRight(false)
                     }
-                }else{
+                } else {
                     checkAnim = false
                 }
                 if (!checkAnim) loadHighQualityPage()
             } else {
                 if (currentRect.right < width / 2 && currentPagePosition < getPageCount() - 1) {
-                    currentPagePosition++
+                    changePage(currentPagePosition + 1)
                 }
                 if (currentRect.left > width / 2 && currentPagePosition > 0) {
-                    currentPagePosition--
+                    changePage(currentPagePosition - 1)
                 }
                 animPageByPage()
             }
@@ -359,19 +368,20 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
             pdfMatrix.set(saveMatrix)
             pdfMatrix.postTranslate(it.animatedValue as Float, 0f)
             updateMatrix()
-            updateView()
+            callback.updateView()
         }
         anim?.addListener(onEnd = {
             loadHighQualityPage()
         })
         anim?.start()
     }
-    private fun pageToPageNoAnim(){
+
+    private fun pageToPageNoAnim() {
         val currentRect = listDraw[currentPagePosition].getRectDraw()
         val tX = width / 2 - currentRect.centerX()
         pdfMatrix.postTranslate(tX, 0f)
         updateMatrix()
-        updateView()
+        callback.updateView()
     }
 
     private fun animLeftRight(isTop: Boolean) {
@@ -389,14 +399,13 @@ class PdfHorizontalPageByPageMode(context: Context, updateView: () -> Unit) :
             pdfMatrix.set(saveMatrix)
             pdfMatrix.postTranslate(it.animatedValue as Float, 0f)
             updateMatrix()
-            updateView()
+            callback.updateView()
         }
         anim?.addListener(onEnd = {
             loadHighQualityPage()
         })
         anim?.start()
     }
-    private fun loadHighQualityPage(){
-        for (item in listDraw) item.loadImageScale()
-    }
+
+
 }

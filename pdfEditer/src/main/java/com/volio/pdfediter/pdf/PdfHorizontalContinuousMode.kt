@@ -15,56 +15,20 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 
-class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
-    PdfBaseMode(context = context, updateView = updateView) {
+class PdfHorizontalContinuousMode(context: Context, callback: PdfPageCallback) :
+    PdfBaseMode(context = context, callback = callback) {
     private var lastY = 0f
     private var lastX = 0f
-    private var typeTouch: Int = PdfView.TYPE_MOVE
     private var lastScale = 1f
-    private var currentPage: Page? = null
-    private var listDraw: MutableList<Page> = mutableListOf()
-    private var pdfMatrix: Matrix = Matrix()
     private val spaceVertical = 20f
     private val spaceHorizontal = 20f
 
     private val pointScaleCenter = PointF(0f, 0f)
-    private val minScale = 1f
-    private val maxScale = 3f
     private var width: Int = 1
     private var height: Int = 1
     private var positionPageMaxHeight: Int = 0
     private var flingAnimation: FlingAnimation? = null
-    private val gestureDetector: GestureDetector =
-        GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent?,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                if (getPageCount() > 0 && e2 != null) {
-                    for (item in listDraw) item.cancelLoadHighQualityImage()
-                    val saveMatrix = Matrix(pdfMatrix)
-                    flingAnimation?.cancel()
-                    flingAnimation = FlingAnimation(FloatValueHolder())
-                    flingAnimation?.setStartVelocity(velocityX)
-                    flingAnimation?.addUpdateListener { _, value, _ ->
-                        pdfMatrix.set(saveMatrix)
-                        pdfMatrix.postTranslate(value, 0f)
-                        updateMatrix()
-                        standardizePage()
-                        updateView()
-                    }
-                    flingAnimation?.addEndListener { animation, canceled, value, velocity ->
-                        for (item in listDraw) item.loadImageScale()
-                    }
-                    flingAnimation?.start()
-                }else{
-                    for (item in listDraw) item.loadImageScale()
-                }
-                return super.onFling(e1, e2, velocityX, velocityY)
-            }
-        })
+
 
     override fun initData(muPDFCore: MuPDFCore, viewWidth: Int, viewHeight: Int) {
         core = muPDFCore
@@ -73,7 +37,10 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
         listDraw.clear()
         var totalWidth = 0f
         for (index in 0 until getPageCount()) {
-            val originRect = getPageSize(index)
+            val page = Page(context, index, muPDFCore, viewWidth, viewHeight) {
+                callback.updateView()
+            }
+            val originRect = page.getPageOriginSize()
             val ratioScreen = (width - 2 * spaceHorizontal) / (height - spaceVertical * 2)
             val ratioPage = originRect.width() / originRect.height()
 
@@ -90,9 +57,7 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
 
             totalWidth += spaceHorizontal + pageWidth
 
-            val page = Page(context, index, muPDFCore, viewWidth, viewHeight) {
-                updateView()
-            }
+
             page.setDefaultRect(
                 RectF(
                     left,
@@ -109,8 +74,9 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
                     }
                 }
             }
+
         }
-        //updateCurrentPage(0)
+        updateCurrentPage(0)
     }
 
     val random = Random(2)
@@ -125,6 +91,7 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
     override fun changePage(position: Int) {
         if (position != currentPagePosition) {
             currentPagePosition = position
+            callback.changePage(position)
         }
     }
 
@@ -138,8 +105,47 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
             currentPagePosition = position
             pageToPageNoAnim()
             updateCurrentPage(position)
+            changePage(position)
         }
     }
+
+    override fun updateScroll() {
+        if (listDraw.size > 0){
+            val firstPage = listDraw[0]
+            val lastPage = listDraw[listDraw.size-1]
+            var space = lastPage.getRectDraw().left - firstPage.getRectDraw().left
+            if (space == 0f) space = 1f
+            var scroll = (spaceHorizontal - firstPage.getRectDraw().left)/space
+            if (scroll < 0) scroll = 0f
+            if (scroll > 1) scroll = 1f
+            callback.scroll(scroll)
+        }
+    }
+
+    override fun fling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float) {
+        if (getPageCount() > 0 && e2 != null) {
+            for (item in listDraw) item.cancelLoadHighQualityImage()
+            val saveMatrix = Matrix(pdfMatrix)
+            flingAnimation?.cancel()
+            flingAnimation = FlingAnimation(FloatValueHolder())
+            flingAnimation?.setStartVelocity(velocityX)
+            flingAnimation?.addUpdateListener { _, value, _ ->
+                pdfMatrix.set(saveMatrix)
+                pdfMatrix.postTranslate(value, 0f)
+                updateMatrix()
+                standardizePage()
+                callback.updateView()
+            }
+            flingAnimation?.addEndListener { animation, canceled, value, velocity ->
+                loadHighQualityPage()
+            }
+            flingAnimation?.start()
+        }else{
+            loadHighQualityPage()
+        }
+    }
+
+
 
     override fun touch(event: MotionEvent): Boolean {
         gestureDetector.onTouchEvent(event)
@@ -148,6 +154,7 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
                 cancelAnim()
                 lastY = event.y
                 lastX = event.x
+                downTouchEvent(event)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 calculateMidPoint(event, pointScaleCenter)
@@ -155,12 +162,11 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
                 typeTouch = PdfView.TYPE_SCALE
             }
             MotionEvent.ACTION_MOVE -> {
-                if (typeTouch == PdfView.TYPE_MOVE) {
+                moveTouchEvent(event,onMove = {
                     pdfMatrix.postTranslate(event.x - lastX, event.y - lastY)
                     lastY = event.y
                     lastX = event.x
-                }
-                if (event.pointerCount == 2 && typeTouch == PdfView.TYPE_SCALE) {
+                },onScale = {
                     val scale = calculateDistance(event)
                     pdfMatrix.postScale(
                         scale / lastScale,
@@ -169,9 +175,9 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
                         pointScaleCenter.y
                     )
                     lastScale = scale
-                }
+                })
                 updatePage()
-                updateView()
+                callback.updateView()
             }
             MotionEvent.ACTION_POINTER_UP -> {
                 Log.d("zzze3", "touch: ${event.pointerCount}")
@@ -191,8 +197,12 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
         return true
     }
 
-    private fun cancelAnim() {
+    override fun cancelAnim() {
         flingAnimation?.cancel()
+    }
+
+    override fun endAnimZoom() {
+        loadHighQualityPage()
     }
 
     private fun findDownPage(motionEvent: MotionEvent) {
@@ -215,7 +225,7 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
     }
 
     private fun updateCurrentPage(position: Int) {
-        Log.d("zzzz", "updateCurrentPage1: $position")
+        changePage(position)
         for (page in listDraw) {
             if (page.position > position - pageLoad && page.position < position + pageLoad) {
                 page.loadImage()
@@ -239,9 +249,10 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
                 updateCurrentPageContinuous(page.position)
             }
         }
+        updateScroll()
     }
 
-    private fun updatePage() {
+    override fun updatePage() {
         updateMatrix()
         standardizePage()
     }
@@ -324,6 +335,6 @@ class PdfHorizontalContinuousMode(context: Context, updateView: () -> Unit) :
         val tX = width / 2 - currentRect.centerX()
         pdfMatrix.postTranslate(tX, 0f)
         updateMatrix()
-        updateView()
+        callback.updateView()
     }
 }
