@@ -16,8 +16,8 @@ class PageTextSelectCtr {
 
     private var rectTextBoxPoint1: RectF = RectF()
     private var rectTextBoxPoint2: RectF = RectF()
-    private var point1 = PointF()
-    private var point2 = PointF()
+    private var point1 = RectF()
+    private var point2 = RectF()
 
     var indexP1 = 0
     var indexP2 = 0
@@ -262,13 +262,15 @@ class PageTextSelectCtr {
                 }
                 rectF.insert(rect)
             }
+
+
         }
 
         rectSelect.left = rectF.left
         rectSelect.right = rectF.right
 
-        point1.set(rectF.left, rectF.centerY())
-        point2.set(rectF.right, rectF.centerY())
+        point1.set(rectSelect.left, bbox.y0,rectSelect.left,bbox.y1)
+        point2.set(rectSelect.right, bbox.y0,rectSelect.right,bbox.y1)
 
         return rectF
     }
@@ -284,16 +286,20 @@ class PageTextSelectCtr {
                 }
                 rectF.insert(rect)
             }
+            rectSelect.left = rect.x1
         }
-        rectSelect.left = rectF.left
-
-        point1.set(rectF.left, rectF.centerY())
+        if (rectF.left != -1f) {
+            rectSelect.left = rectF.left
+        }
+        point1.set(rectSelect.left, bbox.y0,rectSelect.left,bbox.y1)
 
         return rectF
     }
 
     private fun StructuredText.TextLine.getRectP2(x1: Float, y1: Float): RectF {
         val rectF: RectF = RectF(-1f, y1, -1f, y1)
+        var checkSetDefaultP2:Boolean = true
+
         for (char in chars) {
             val rect = char.quad.toRect()
             if (rect.x1 <= x1 || rect.contains(x1, rect.centerY())) {
@@ -307,10 +313,15 @@ class PageTextSelectCtr {
                 rectF.insert(rect)
 
             }
+            if (checkSetDefaultP2){
+                rectSelect.right = rect.x0
+            }
         }
-        rectSelect.right = rectF.right
-        point2.set(rectF.right, rectF.centerY())
-//        if (rectF.right == -1f && chars.isNotEmpty()) point2.x = chars[0].quad.toRect().x0
+        if (rectF.left != -1f) {
+            rectSelect.right = rectF.right
+        }
+        point2.set(rectSelect.right, bbox.y0,rectSelect.right,bbox.y1)
+
         return rectF
     }
 

@@ -54,9 +54,20 @@ class Page(
     private var textSelectCtr = PageTextSelectCtr()
     private var textBlock: MutableList<StructuredText.TextBlock> = mutableListOf()
 
-    private var rectSelectView:RectF = RectF()
+    private var rectSelectView: RectF = RectF()
 
-    private var listRectSelect:MutableList<RectF> = mutableListOf()
+    private var listRectSelect: MutableList<RectF> = mutableListOf()
+
+    private var isSelect: Boolean = false
+
+    private var pointSelectHeight = 60f
+    private var pointSelectRadius = 20f
+
+    private var pointSelectRect1 = RectF()
+    private var pointSelectRect2 = RectF()
+
+    private var paintPointSelect = Paint(Paint.ANTI_ALIAS_FLAG)
+
 
     init {
         paint.color = Color.BLUE
@@ -68,6 +79,9 @@ class Page(
         paintTextTest.color = Color.BLACK
         paintTextTest.textSize = 20f
         paintTextTest.textAlign = Paint.Align.CENTER
+
+        paintPointSelect.strokeWidth = 8f
+        paintPointSelect.color = Color.RED
     }
 
     fun getPageOriginSize(): RectF {
@@ -120,41 +134,76 @@ class Page(
 ////                canvas.drawText("$i", item.bbox.centerX(), item.bbox.centerY(), paintTextTest)
 //            }
 
-            canvas.drawText(
-                "point1",
-                textSelectCtr.getRectSelect().left,
-                textSelectCtr.getRectSelect().top,
-                paintTextTest
-            )
-            canvas.drawText(
-                "point2",
-                textSelectCtr.getRectSelect().right,
-                textSelectCtr.getRectSelect().bottom,
-                paintTextTest
-            )
+//            canvas.drawText(
+//                "point1",
+//                textSelectCtr.getRectSelect().left,
+//                textSelectCtr.getRectSelect().top,
+//                paintTextTest
+//            )
+//            canvas.drawText(
+//                "point2",
+//                textSelectCtr.getRectSelect().right,
+//                textSelectCtr.getRectSelect().bottom,
+//                paintTextTest
+//            )
 
             paintTextTest.setColor(Color.BLUE)
-            canvas.drawCircle(
-                textSelectCtr.getPoint1().x,
-                textSelectCtr.getPoint1().y,
-                2f,
-                paintTextTest
-            )
-            canvas.drawCircle(
-                textSelectCtr.getPoint2().x,
-                textSelectCtr.getPoint2().y,
-                2f,
-                paintTextTest
-            )
-            for (rect in listRectSelect){
-                paintBitmapTest.color = Color.argb(50,255,0,0)
-                canvas.drawRect(rect,paintBitmapTest)
+//            canvas.drawCircle(
+//                textSelectCtr.getPoint1().x,
+//                textSelectCtr.getPoint1().y,
+//                2f,
+//                paintTextTest
+//            )
+//            canvas.drawCircle(
+//                textSelectCtr.getPoint2().x,
+//                textSelectCtr.getPoint2().y,
+//                2f,
+//                paintTextTest
+//            )
+            if (isSelect) {
+                for (rect in listRectSelect) {
+                    paintBitmapTest.color = Color.argb(50, 255, 0, 0)
+                    canvas.drawRect(rect, paintBitmapTest)
+                }
             }
 
             canvas.restore()
+//            paintTextTest.textSize = 120f
+//            canvas.drawRect(
+//                rectSelectView.left,
+//                rectSelectView.top,
+//                rectSelectView.left + 500,
+//                rectSelectView.top + 500,
+//                paintTextTest
+//            )
+//            canvas.drawRect(
+//                rectSelectView.right,
+//                rectSelectView.bottom,
+//                rectSelectView.right + 500,
+//                rectSelectView.bottom + 500,
+//                paintTextTest
+//            )
+            if (isSelect) {
+                drawPointSelect(canvas, pointSelectRect1)
+                drawPointSelect(canvas, pointSelectRect2)
+            }
+
         }
 
     }
+
+    private fun drawPointSelect(canvas: Canvas,rectF: RectF) {
+        val stopLine = rectF.bottom + pointSelectHeight
+        canvas.drawLine(
+            rectF.centerX(),
+            rectF.top,
+            rectF.centerX(),
+            stopLine,
+            paintPointSelect
+        )
+        canvas.drawCircle(rectF.centerX(),stopLine,pointSelectRadius,paintPointSelect)
+    }
+
 
     fun getRectDraw(): RectF {
         return rectDraw
@@ -168,6 +217,9 @@ class Page(
         currentMatrix.set(matrix)
         pageMatrix.setRectToRect(rectOriginPage, rectDraw, Matrix.ScaleToFit.CENTER)
         pageMatrix.invert(invertPageMatrix)
+        if (isSelect) {
+            updatePointSelect()
+        }
     }
 
     private var dstPointMap: FloatArray = floatArrayOf(0f, 0f)
@@ -356,11 +408,38 @@ class Page(
         listRectSelect.addAll(listRectF)
         updateView()
     }
-    fun getRectSelect():RectF{
-        pageMatrix.mapRect(rectSelectView, textSelectCtr.getRectSelect())
+
+    private fun updatePointSelect() {
+        pageMatrix.mapRect(pointSelectRect1, textSelectCtr.getPoint1())
+        pageMatrix.mapRect(pointSelectRect2, textSelectCtr.getPoint2())
+
+    }
+
+    private fun updateRectSelectView() {
+        val rectF = textSelectCtr.getRectSelect()
+        val pointArray = floatArrayOf(rectF.left, rectF.top, rectF.right, rectF.bottom)
+        val pointMap = FloatArray(4)
+        pageMatrix.mapPoints(pointMap, pointArray)
+        rectSelectView.set(pointMap[0], pointMap[1], pointMap[2], pointMap[3])
+    }
+
+    fun getRectSelect(): RectF {
+        updateRectSelectView()
         return rectSelectView
     }
 
+    fun clearSelect(){
+        isSelect = false
+        listRectSelect.clear()
+        updateView()
+    }
+
+    fun isSelect() = isSelect
+
+    fun setSelect(isSelect:Boolean){
+        this.isSelect = isSelect
+        updateView()
+    }
 
 
     companion object {
